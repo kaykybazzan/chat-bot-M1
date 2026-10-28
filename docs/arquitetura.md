@@ -49,6 +49,19 @@ flowchart LR
 Next.js e Express são dois processos separados, falando por HTTP, não
 um só fazendo tudo (ver ADR-0006 para o porquê).
 
+## Páginas do Next.js
+
+- `login`, `cadastro` — acesso à conta.
+- `editor` — canvas do fluxo e simulador lado a lado, para testar
+  enquanto edita (H2). Acoplar o simulador ao editor significa que,
+  se um dia for necessário um link de simulador isolado, essa lógica
+  precisará ser extraída.
+- `painel` — lista de atendimentos (WhatsApp e simulador juntos) e
+  detalhe de cada um (H4).
+
+Em código, cada container corresponde a uma pasta em `apps/`
+(`apps/web` para o Next.js, `apps/api` para o Express).
+
 ## O fluxo mais importante: mensagem recebida pelo WhatsApp
 
 ```mermaid

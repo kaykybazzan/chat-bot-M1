@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ENUMS
+
+enum Status {
+  draft
+  published
+  archived
+}
+
+enum ChannelType {
+  whatsapp
+  simulator
+}
+
+enum MessageDirection {
+  in
+  out
+}
+
+enum OutboxStatus {
+  pending
+  sending
+  sent
+  failed
+}
+
+// MODELS
+
+model user {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  created_at    DateTime @default(now())
+
+  flows         flows[]
+  channels      channels[]
+  contacts      contacts[]
+}
+
+model flows {
+  id         String   @id @default(uuid())
+  user_id    String   @unique
+  name       String?
+  created_at DateTime @default(now())
+
+  user       user            @relation(fields: [user_id], references: [id])
+  versions   flow_versions[]
+}
+
+model flow_versions {
+  id           String    @id @default(uuid())
+  flow_id      String
+  number       Int
+  status       Status    @default(draft)
+  definition   Json     
+  published_at DateTime?
+  created_at   DateTime  @default(now())
+
+  flow          flows           @relation(fields: [flow_id], references: [id])
+  conversations conversations[]
+
+  @@unique([flow_id, number])
+  @@index([flow_id], map: "one_published_version") // "WHERE status = 'published'"
+}
+
+model channels {
+  id          String      @id @default(uuid())
+  user_id     String
+  type        ChannelType
+  external_id String?
+
+  user        user        @relation(fields: [user_id], references: [id])
+
+  @@unique([type, external_id])
+}
+
+model contacts {
+  id            String      @id @default(uuid())
+  user_id       String
+  channel_type  ChannelType // ou String, mas mapeado ao tipo
+  external_id   String
+  display_name  String?
+  created_at    DateTime    @default(now())
+
+  user          user          @relation(fields: [user_id], references: [id])
+  conversations conversations[]
+
+  @@unique([user_id, channel_type, external_id])
+  @@unique([id, user_id], name: "for_composite_fk")
+}
+
+model conversations {
+  id                       String    @id @default(uuid())
+  user_id                  String
+  contact_id               String
+  flow_version_id          String
+  current_block_id         String?
+  variables                Json     
+  started_at               DateTime
+  last_customer_message_at DateTime
+  finished_at              DateTime?
+
+  flow_version             flow_versions @relation(fields: [flow_version_id], references: [id])
+  contact                  contacts      @relation(fields: [contact_id, user_id], references: [id, user_id])
+  messages                 messages[]
+
+  @@index([user_id, last_customer_message_at])
+  @@index([contact_id, started_at])
+}
+
+model messages {
+  id              String           @id @default(uuid())
+  conversation_id String
+  direction       MessageDirection // 'in' ou 'out'
+  content         String
+  external_id     String?
+  block_id        String?
+  created_at      DateTime         @default(now())
+
+  conversation    conversations    @relation(fields: [conversation_id], references: [id])
+  outbox          outbox?
+
+  @@index([conversation_id, created_at])
+  @@index([external_id], map: "dedup_incoming") // "WHERE external_id IS NOT NULL"
+}
+
+model outbox {
+  id              String       @id @default(uuid())
+  message_id      String       @unique
+  status          OutboxStatus @default(pending)
+  attempts        Int          @default(0)
+  next_attempt_at DateTime
+  locked_until    DateTime?
+  last_error      String?
+
+  message         messages     @relation(fields: [message_id], references: [id])
+
+  @@index([status, next_attempt_at])
+}
