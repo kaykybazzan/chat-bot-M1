@@ -34,63 +34,64 @@ enum OutboxStatus {
 
 // MODELS
 
-model user {
-  id            String   @id @default(uuid())
+model users {
+  id            String   @id @default(uuid()) @db.Uuid        // << @db.Uuid
   email         String   @unique
   password_hash String
-  created_at    DateTime @default(now())
+  created_at    DateTime @default(now()) @db.Timestamptz(3)   // << @db.Timestamptz(3)
 
   flows         flows[]
   channels      channels[]
   contacts      contacts[]
+
 }
 
 model flows {
-  id         String   @id @default(uuid())
-  user_id    String   @unique
+  id         String   @id @default(uuid()) @db.Uuid
+  user_id    String   @unique @db.Uuid
   name       String?
-  created_at DateTime @default(now())
+  created_at DateTime @default(now()) @db.Timestamptz(3)
 
-  user       user            @relation(fields: [user_id], references: [id])
+  user       users            @relation(fields: [user_id], references: [id])
   versions   flow_versions[]
 }
 
 model flow_versions {
-  id           String    @id @default(uuid())
-  flow_id      String
+  id           String    @id @default(uuid()) @db.Uuid
+  flow_id      String    @db.Uuid
   number       Int
   status       Status    @default(draft)
-  definition   Json     
-  published_at DateTime?
-  created_at   DateTime  @default(now())
+  definition   Json
+  published_at DateTime? @db.Timestamptz(3)
+  created_at   DateTime  @default(now()) @db.Timestamptz(3)
 
   flow          flows           @relation(fields: [flow_id], references: [id])
   conversations conversations[]
 
   @@unique([flow_id, number])
-  @@index([flow_id], map: "one_published_version") // "WHERE status = 'published'"
+  @@index([flow_id], map: "one_published_version") // ajuste manual necessário: WHERE status = 'published'
 }
 
 model channels {
-  id          String      @id @default(uuid())
-  user_id     String
+  id          String      @id @default(uuid()) @db.Uuid
+  user_id     String      @db.Uuid
   type        ChannelType
   external_id String?
 
-  user        user        @relation(fields: [user_id], references: [id])
+  user        users        @relation(fields: [user_id], references: [id])
 
   @@unique([type, external_id])
 }
 
 model contacts {
-  id            String      @id @default(uuid())
-  user_id       String
-  channel_type  ChannelType // ou String, mas mapeado ao tipo
+  id            String      @id @default(uuid()) @db.Uuid
+  user_id       String      @db.Uuid
+  channel_type  ChannelType
   external_id   String
   display_name  String?
-  created_at    DateTime    @default(now())
+  created_at    DateTime    @default(now()) @db.Timestamptz(3)
 
-  user          user          @relation(fields: [user_id], references: [id])
+  user          users       @relation(fields: [user_id], references: [id])
   conversations conversations[]
 
   @@unique([user_id, channel_type, external_id])
@@ -98,15 +99,15 @@ model contacts {
 }
 
 model conversations {
-  id                       String    @id @default(uuid())
-  user_id                  String
-  contact_id               String
-  flow_version_id          String
+  id                       String    @id @default(uuid()) @db.Uuid
+  user_id                  String    @db.Uuid
+  contact_id               String    @db.Uuid
+  flow_version_id          String    @db.Uuid
   current_block_id         String?
-  variables                Json     
-  started_at               DateTime
-  last_customer_message_at DateTime
-  finished_at              DateTime?
+  variables                Json
+  started_at               DateTime  @db.Timestamptz(3)
+  last_customer_message_at DateTime  @db.Timestamptz(3)
+  finished_at              DateTime? @db.Timestamptz(3)
 
   flow_version             flow_versions @relation(fields: [flow_version_id], references: [id])
   contact                  contacts      @relation(fields: [contact_id, user_id], references: [id, user_id])
@@ -117,28 +118,28 @@ model conversations {
 }
 
 model messages {
-  id              String           @id @default(uuid())
-  conversation_id String
-  direction       MessageDirection // 'in' ou 'out'
+  id              String           @id @default(uuid()) @db.Uuid
+  conversation_id String           @db.Uuid
+  direction       MessageDirection
   content         String
   external_id     String?
   block_id        String?
-  created_at      DateTime         @default(now())
+  created_at      DateTime         @default(now()) @db.Timestamptz(3)
 
   conversation    conversations    @relation(fields: [conversation_id], references: [id])
   outbox          outbox?
 
   @@index([conversation_id, created_at])
-  @@index([external_id], map: "dedup_incoming") // "WHERE external_id IS NOT NULL"
+  @@index([external_id], map: "dedup_incoming") // ajuste manual necessário: WHERE external_id IS NOT NULL
 }
 
 model outbox {
-  id              String       @id @default(uuid())
-  message_id      String       @unique
+  id              String       @id @default(uuid()) @db.Uuid
+  message_id      String       @unique @db.Uuid
   status          OutboxStatus @default(pending)
   attempts        Int          @default(0)
-  next_attempt_at DateTime
-  locked_until    DateTime?
+  next_attempt_at DateTime     @db.Timestamptz(3)
+  locked_until    DateTime?    @db.Timestamptz(3)
   last_error      String?
 
   message         messages     @relation(fields: [message_id], references: [id])
